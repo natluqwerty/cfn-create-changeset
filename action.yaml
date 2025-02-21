@@ -11,7 +11,7 @@ inputs:
   stack-name:
     required: true
   event-type:
-    required: true
+    required: false
   parameter-json-path:
     descriptions: The JSON file for cfn parameters
     required: false

@@ -111,7 +111,7 @@ runs:
     #     path: table_markdown.txt
 
     - name: PR comment with file
-      if: ${{ inputs.event-type }} == 'pull_request'
+      if: ${{ inputs.event-type  == 'pull_request' }}
       uses: thollander/actions-comment-pull-request@v3
       with:
         file-path: table_markdown.txt

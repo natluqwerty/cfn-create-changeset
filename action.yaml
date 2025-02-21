@@ -1,0 +1,114 @@
+name: "Customised Action - Generate CF ChangeSet and send Comment to Pull Request"
+author: "Nat Lu"
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+inputs:
+  template-path:
+    required: true
+  stack-name:
+    required: true
+  parameter-json-path:
+    descriptions: The JSON file for cfn parameters
+    required: false
+    default: no-parameter-needed
+
+runs:
+  using: "composite"
+  steps:
+    - name: Create Changeset and Extract Markdown Table
+      shell: bash
+      run: |
+
+        StackName=${{ inputs.stack-name }}
+
+        IfStackExists=`aws cloudformation describe-stacks --stack-name $StackName --output json || true`
+
+        # If stack name does not exist describe-stacks will throw an error, so we use "|| true" to make it not exit
+        IfReviewInProgress=`aws cloudformation describe-stacks --stack-name $StackName --query "Stacks[0].StackStatus" | tr -d '"' || true`
+
+        echo $IfReviewInProgress
+
+        # If stack does exist and the status is CREATE_COMPLETE, we use --change-set-type UPDATE. Otherwise we use -change-set-type CREATE
+        if [ -n "$IfStackExists" ] && ([ $IfReviewInProgress == "CREATE_COMPLETE" ] || [ $IfReviewInProgress == "UPDATE_COMPLETE" ])
+        then
+            status=UPDATE
+        else
+            status=CREATE
+        fi
+
+        echo the status is $status
+
+        # Each change set name should be unique so we add timestamp
+        timestamp=`date '+%s'`
+
+        if [ ${{ inputs.parameter-json-path }} != "no-parameter-needed" ]
+        then
+          # Create change set with parameters
+          cat ${{ inputs.parameter-json-path }}
+          changeset_id=`aws cloudformation create-change-set --stack-name $StackName --cli-input-json file://${{ inputs.parameter-json-path }} --template-body file://${{ inputs.template-path }} --change-set-type $status --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --change-set-name $StackName-changeset-$timestamp --query "Id" | tr -d '"'`
+        else
+          # Create change set without parameters
+          changeset_id=`aws cloudformation create-change-set --stack-name $StackName --template-body  file://${{ inputs.template-path }} --change-set-type $status --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --change-set-name $StackName-changeset-$timestamp --query "Id" | tr -d '"'`
+        fi
+
+        # !!!!!! Need to make sure changeset status is CREATE_COMPLETE, otherwise the output.json will be an empty array!! 😭
+        # https://docs.aws.amazon.com/cli/latest/reference/cloudformation/wait/change-set-create-complete.html
+        # If nothing changed, it will fail but we can use "|| true" to make it not exit
+        aws cloudformation wait change-set-create-complete --stack-name $StackName --change-set-name $StackName-changeset-$timestamp || true
+
+        aws cloudformation describe-change-set --change-set-name $changeset_id --query "Changes[*].ResourceChange.{Action:Action,LogicalResourceId:LogicalResourceId,ResourceType:ResourceType,Replacement:Replacement}" >> output.json
+
+        cat output.json
+
+        readarray -t my_array < <(jq -c '.[]' output.json)
+
+        if [ -z "$my_array" ]
+        then
+          echo **🚨 There is no changes in Cloudformation template ** >> table_markdown.txt
+          exit 0
+        fi
+
+        # Generate Markdown Table
+        echo "|🚀 Action|Logical ResourceId|Resource Type|Replacement|" >> table_markdown.txt
+        echo "|-|-|-|-|" >> table_markdown.txt
+
+        # Iterate through the Bash array
+        for item in ${my_array[@]}; do
+          Action=$(jq '.Action' <<< $item | tr -d '"')
+          LogicalResourceId=$(jq '.LogicalResourceId' <<< $item | tr -d '"')
+          ResourceType=$(jq '.ResourceType' <<< $item | tr -d '"')
+          Replacement=$(jq '.Replacement' <<< $item | tr -d '"')
+          if [ $Action == "Add" ];then
+            color=🟩
+          fi
+          if [ $Action == "Dynamic" ];then
+            color=🟦
+          fi
+          if [ $Action == "Modify" ];then
+            color=🟨
+          fi
+          if [ $Action == "Import" ];then
+            color=🟪
+          fi
+          if [ $Replacement != null ];then
+            color=🔴
+          fi
+          echo '|' $color $Action '|' $LogicalResourceId '|' $ResourceType '|' $Replacement '|' >> table_markdown.txt
+        done
+
+        cat table_markdown.txt
+
+    # - name: Comment PR
+    #   uses: natluqwerty/pr-comment@main
+    #   env:
+    #     GITHUB_TOKEN: ${{ github.token }}
+    #   with:
+    #     path: table_markdown.txt
+
+    - name: PR comment with file
+      uses: thollander/actions-comment-pull-request@v3
+      with:
+        file-path: table_markdown.txt

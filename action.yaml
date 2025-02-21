@@ -10,6 +10,8 @@ inputs:
     required: true
   stack-name:
     required: true
+  event-type:
+    required: true
   parameter-json-path:
     descriptions: The JSON file for cfn parameters
     required: false
@@ -109,6 +111,7 @@ runs:
     #     path: table_markdown.txt
 
     - name: PR comment with file
+      if: ${{ inputs.event-type }} == 'pull_request'
       uses: thollander/actions-comment-pull-request@v3
       with:
         file-path: table_markdown.txt

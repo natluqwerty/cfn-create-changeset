@@ -12,7 +12,7 @@ Authenticate AWS Account
   uses: aws-actions/configure-aws-credentials@v1
   with:
     role-to-assume: arn:aws:iam::123456789100:role/my-github-actions-role
-    role-session-name: DNA-Automation-Github-Actions-Session
+    role-session-name: Github-Actions-Session
     aws-region: ap-southeast-2
 ```
 

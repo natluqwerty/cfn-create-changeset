@@ -103,13 +103,6 @@ runs:
 
         cat table_markdown.txt
 
-    # - name: Comment PR
-    #   uses: natluqwerty/pr-comment@main
-    #   env:
-    #     GITHUB_TOKEN: ${{ github.token }}
-    #   with:
-    #     path: table_markdown.txt
-
     - name: PR comment with file
       if: ${{ inputs.event-type  == 'pull_request' }}
       uses: thollander/actions-comment-pull-request@v3

@@ -34,7 +34,7 @@ runs:
         echo $IfReviewInProgress
 
         # If stack does exist and the status is CREATE_COMPLETE, we use --change-set-type UPDATE. Otherwise we use -change-set-type CREATE
-        if [ -n "$IfStackExists" ] && ([ $IfReviewInProgress == "CREATE_COMPLETE" ] || [ $IfReviewInProgress == "UPDATE_COMPLETE" ] || [ $IfReviewInProgress == "UPDATE_ROLLBACK_COMPLETE" ])
+        if [ -n "$IfStackExists" ] && ([ $IfReviewInProgress == "CREATE_COMPLETE" ] || [ $IfReviewInProgress == "UPDATE_COMPLETE" ] )
         then
             status=UPDATE
         else
